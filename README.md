@@ -1,17 +1,26 @@
 # chatFlow
 
-chatFlow is a real-time web chat application. It uses Clerk for authentication, MongoDB for users and messages, Socket.IO for online presence and message events, and ImageKit for optional image and video uploads.
+chatFlow is a real-time chat application built with React on the frontend and an Express + MongoDB API on the backend. It uses Clerk for authentication, Socket.IO for live updates, and optional ImageKit media uploads for images and videos.
 
-## Features
+## Overview
 
-- Clerk sign-in and sign-up
-- User directory and conversation sidebar
-- Real-time online-user presence
-- Direct messages with text, images, and videos
-- Searchable user and conversation lists
+The app includes:
+
+- Clerk-powered sign in and sign up
+- A conversation sidebar with user discovery
+- Real-time online presence and message delivery
+- Direct messaging with text, images, and video support
 - Theme presets, dark mode, and wallpaper selection
-- Responsive desktop and mobile chat layouts
-- Single Docker image for the frontend and backend
+- A production-ready Docker build that serves both the frontend and the API from a single container
+
+## Tech Stack
+
+- Frontend: React, Vite, Tailwind CSS, HeroUI, Zustand
+- Backend: Node.js, Express, Mongoose, Socket.IO
+- Authentication: Clerk
+- Storage: MongoDB
+- Media uploads: ImageKit
+- Deployment: Docker
 
 ## Project Structure
 
@@ -19,35 +28,35 @@ chatFlow is a real-time web chat application. It uses Clerk for authentication, 
 chatflow/
 ├── backend/
 │   ├── src/
-│   │   ├── controllers/       Request handlers
-│   │   ├── lib/               Database, Socket.IO, ImageKit, and cron setup
-│   │   ├── middleware/        Authentication and upload middleware
-│   │   ├── models/            Mongoose models
-│   │   ├── routes/            API routes
-│   │   └── webhooks/          Clerk user synchronization
+│   │   ├── controllers/
+│   │   ├── lib/
+│   │   ├── middleware/
+│   │   ├── models/
+│   │   ├── routes/
+│   │   ├── webhooks/
+│   │   └── index.js
+│   ├── .env.example
 │   └── package.json
 ├── frontend/
-│   ├── public/                Static wallpapers, sounds, and logo assets
+│   ├── public/
 │   ├── src/
-│   │   ├── components/        Reusable UI and chat components
-│   │   ├── context/           Theme and wallpaper providers
-│   │   ├── pages/             Authentication and chat pages
-│   │   └── store/             Zustand auth and chat state
+│   ├── .env.example
 │   └── package.json
 ├── Dockerfile
-└── README.md
+├── README.md
+└── package-lock.json
 ```
 
 ## Requirements
 
-- Node.js 22 or newer
+- Node.js 22+
 - npm
-- MongoDB database
-- Clerk application
-- Docker, if deploying with the included Dockerfile
-- ImageKit account, only if media uploads are needed
+- MongoDB instance
+- Clerk app and webhook secret
+- ImageKit credentials for media uploads (optional but recommended)
+- Docker for containerized deployment
 
-## Local Development
+## Local Development Setup
 
 ### 1. Install dependencies
 
@@ -59,9 +68,9 @@ cd ../frontend
 npm install
 ```
 
-### 2. Configure the backend
+### 2. Configure environment variables
 
-Create `backend/.env`:
+Create a backend `.env` file in `backend/`:
 
 ```env
 PORT=3000
@@ -71,71 +80,79 @@ CLERK_WEBHOOK_SIGNING_SECRET=whsec_your_clerk_webhook_secret
 IMAGE_KIT_PRIVATE_KEY=your_imagekit_private_key
 ```
 
-`CLERK_WEBHOOK_SIGNING_SECRET` is required for Clerk user synchronization. `IMAGE_KIT_PRIVATE_KEY` can be omitted when media uploads are not used.
-
-### 3. Configure the frontend
-
-Create `frontend/.env`:
+Create a frontend `.env` file in `frontend/`:
 
 ```env
 VITE_CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_publishable_key
 ```
 
-The development frontend calls the backend at `http://localhost:3000/api`.
+Notes:
 
-### 4. Start both applications
+- `CLERK_WEBHOOK_SIGNING_SECRET` is required for user sync via Clerk webhooks.
+- `IMAGE_KIT_PRIVATE_KEY` is optional if you do not use media uploading.
+- The frontend API base URL is configured in `frontend/src/lib/axios.js` to use `http://localhost:3000/api` in development.
 
-In one terminal:
+### 3. Start the app
+
+Start the backend:
 
 ```bash
 cd backend
 npm run dev
 ```
 
-In another terminal:
+Start the frontend in another terminal:
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-Open `http://localhost:5173`.
+Then open:
 
-## Clerk Configuration
+```text
+http://localhost:5173
+```
 
-Create a Clerk application and configure the frontend publishable key and backend webhook:
+## Clerk Setup
 
-1. Add `VITE_CLERK_PUBLISHABLE_KEY` to the frontend environment.
-2. Add the backend `CLERK_WEBHOOK_SIGNING_SECRET` to the backend environment.
-3. Create a Clerk webhook pointing to:
+To use authentication correctly:
+
+1. Create a Clerk app in the Clerk dashboard.
+2. Copy the frontend publishable key into `frontend/.env` as `VITE_CLERK_PUBLISHABLE_KEY`.
+3. Add the backend webhook secret to `backend/.env` as `CLERK_WEBHOOK_SIGNING_SECRET`.
+4. Configure a Clerk webhook for:
 
 ```text
 https://your-domain.example.com/api/webhooks/clerk
 ```
 
-4. Subscribe to `user.created`, `user.updated`, and `user.deleted`.
+5. Subscribe to these events:
+   - `user.created`
+   - `user.updated`
+   - `user.deleted`
 
-The webhook creates or updates the MongoDB user record. The protected API uses the Clerk user ID to find that record.
+This webhook syncs Clerk users into MongoDB so the API can find the authenticated user record.
 
 ## API Routes
 
-All protected routes require a valid Clerk session.
+The backend exposes the following routes under `/api`.
 
 | Method | Route | Description |
 | --- | --- | --- |
 | `GET` | `/health` | Health check |
-| `GET` | `/api/auth/check` | Return the authenticated user |
-| `GET` | `/api/messages/users` | List users except the signed-in user |
-| `GET` | `/api/messages/conversations` | List existing conversation partners |
-| `GET` | `/api/messages/:id` | Get messages with a user |
-| `POST` | `/api/messages/send/:id` | Send a text or media message |
-| `POST` | `/api/webhooks/clerk` | Synchronize Clerk users |
+| `GET` | `/api/auth/check` | Validates the authenticated Clerk user |
+| `GET` | `/api/messages/users` | Lists users except the current user |
+| `GET` | `/api/messages/conversations` | Lists conversation partners |
+| `GET` | `/api/messages/:id` | Fetches messages with a specific user |
+| `POST` | `/api/messages/send/:id` | Sends a text or media message |
+| `POST` | `/api/webhooks/clerk` | Syncs Clerk user events |
 
-## Production Docker Build
+## Docker Deployment
 
-The Dockerfile builds the frontend, copies the backend source into a production `dist` directory, and serves the frontend from the backend server.
+The repository includes a Dockerfile that builds the React app and serves it through the Express backend in production.
 
-Build the image from the repository root:
+Build from the repository root:
 
 ```bash
 docker build \
@@ -143,19 +160,19 @@ docker build \
   -t chatflow .
 ```
 
-Run it:
+Run the container:
 
 ```bash
 docker run --rm -p 3001:3001 \
   -e PORT=3001 \
-  -e MONGO_URI="your_mongodb_connection_string" \
+  -e MONGO_URI="mongodb://your_mongodb_uri" \
   -e FRONTEND_URL="https://your-domain.example.com" \
   -e CLERK_WEBHOOK_SIGNING_SECRET="your_webhook_secret" \
   -e IMAGE_KIT_PRIVATE_KEY="your_imagekit_private_key" \
   chatflow
 ```
 
-The production server listens on port `3001` by default and serves both the SPA and `/api` routes.
+The production server listens on port `3001` and serves both the built frontend and the API routes.
 
 ## Useful Commands
 
@@ -163,29 +180,27 @@ The production server listens on port `3001` by default and serves both the SPA 
 
 ```bash
 cd frontend
-npm run dev       # Start Vite development server
-npm run build     # Create production frontend assets
-npm run lint      # Run ESLint
-npm run preview   # Preview the production frontend build
+npm run dev
+npm run build
+npm run lint
+npm run preview
 ```
 
 ### Backend
 
 ```bash
 cd backend
-npm run dev       # Start with Nodemon
-npm start         # Start the backend
+npm run dev
+npm start
 ```
-
-The backend build script uses Unix commands and is intended for the Linux Docker build. On Windows, use `node --check` for a syntax check or run the Docker build to validate the production build.
 
 ## Troubleshooting
 
-- **The app stays on the loading screen:** verify that `/api/auth/check` responds and that the signed-in Clerk user has a matching MongoDB record.
-- **No users appear:** verify `MONGO_URI`, confirm the Clerk webhook is configured, and check that the production database contains real user records. Remove old development records directly in MongoDB if needed.
-- **Media uploads fail:** set `IMAGE_KIT_PRIVATE_KEY` and verify the ImageKit account configuration.
-- **CORS errors locally:** set `FRONTEND_URL=http://localhost:5173` in the backend environment.
-- **Docker cannot resolve frontend dependencies:** install without `--legacy-peer-deps` so HeroUI peer dependencies are installed.
+- If the app stays stuck on the loading screen, verify that `/api/auth/check` returns a valid authenticated user and that the Clerk user exists in MongoDB.
+- If no users appear, confirm `MONGO_URI` and make sure the Clerk webhook is configured correctly.
+- If media uploads fail, verify the ImageKit private key and account configuration.
+- If local requests fail due to CORS, make sure `FRONTEND_URL=http://localhost:5173` is set in the backend environment.
+- If Docker fails during install, run dependency installation without forcing legacy peer resolution unless the lockfile specifically requires it.
 
 ## License
 
